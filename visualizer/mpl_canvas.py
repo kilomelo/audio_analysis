@@ -70,8 +70,8 @@ class MplCanvas(FigureCanvas):
 
     def start_animation(self):
         # todo 改成填充默认数据
-        while len(self.data_buffer) == 0:
-            time.sleep(0.01)  # 短暂等待，避免阻塞
+        # while len(self.data_buffer) == 0:
+            # time.sleep(0.01)  # 短暂等待，避免阻塞
         """启动动画"""
         self.ani = FuncAnimation(
             self.fig, 
@@ -91,3 +91,6 @@ class MplCanvas(FigureCanvas):
         """响应音频参数变化"""
         for layer in self.layers:
             layer.on_audio_params_changed(sample_rate, chunk_size, n_fft)
+
+    def set_melody_reference_lines_visible(self, visible):
+        self.layers[2].set_reference_lines_visible(visible)

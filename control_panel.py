@@ -17,6 +17,7 @@ class ControlPanel(QWidget):
     slider_released = pyqtSignal(int)
     slider_moved = pyqtSignal(int)
     slider_pressed = pyqtSignal()
+    melody_ref_lines_toggled = pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -33,13 +34,6 @@ class ControlPanel(QWidget):
         self.progress_slider = QSlider(Qt.Horizontal)
         self.time_label = QLabel("00:00 / 00:00")
         self._init_progress_style()
-        
-        # 按钮组
-        self.btn_start_end_record = BlinkButton("Start record")
-        self.btn_record_mode = QPushButton("Record mode")
-
-        # 勾选框
-        self.toggle_reduce_noise = QCheckBox("Save the noise-reduced audio")
         
         # 文件列表
         self.file_list = QListWidget()
@@ -88,6 +82,9 @@ class ControlPanel(QWidget):
         """创建按钮容器"""
         btn_group = QWidget()
         layout = QVBoxLayout(btn_group)
+        # 按钮组
+        self.btn_start_end_record = BlinkButton("Start record")
+        self.btn_record_mode = QPushButton("Record mode")
         layout.addWidget(self.btn_start_end_record)
         layout.addWidget(self.btn_record_mode)
         return btn_group
@@ -96,6 +93,11 @@ class ControlPanel(QWidget):
         """创建勾选框容器"""
         toggle_group = QWidget()
         layout = QVBoxLayout(toggle_group)
+        # 旋律层参考线勾选框
+        self.toggle_melody_ref_lines = QCheckBox("Show Melody pitch reference line")
+        # 保存额外降噪文件勾选框
+        self.toggle_reduce_noise = QCheckBox("Save the noise-reduced audio")
+        layout.addWidget(self.toggle_melody_ref_lines)
         layout.addWidget(self.toggle_reduce_noise)
         return toggle_group
 
@@ -107,6 +109,7 @@ class ControlPanel(QWidget):
         self.btn_start_end_record.clicked.connect(self.start_end_record_clicked)
         self.btn_record_mode.clicked.connect(self.record_mode_clicked)
         self.toggle_reduce_noise.stateChanged.connect(self.reduce_noise_toggled)
+        self.toggle_melody_ref_lines.stateChanged.connect(self.melody_ref_lines_toggled)
         self.progress_slider.sliderReleased.connect(
             lambda: self.slider_released.emit(self.progress_slider.value())
         )
@@ -115,7 +118,6 @@ class ControlPanel(QWidget):
 
     def update_button_state(self, is_file_mode, is_recording):
         """更新按钮状态"""
-        print(f'update_button_state, is_file_mode: {is_file_mode}, is_recording: {is_recording}')
         self.btn_start_end_record.setEnabled(not is_file_mode)
         self.btn_record_mode.setEnabled(is_file_mode)
         

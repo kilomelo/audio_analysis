@@ -13,6 +13,8 @@ class MelodyLayer(BaseLayer):
         self.time_window = MELODY_LAYER_PARAMS['time_window']
         self.possible_misjudgment_peak_time = None
         self.possible_misjudgment_peak_freq = None
+        self.reference_lines = []
+        self.show_reference = False
 
     def initialize(self, fig, position):
         self.ax = fig.add_axes(position, frameon=False)
@@ -30,7 +32,51 @@ class MelodyLayer(BaseLayer):
             edgecolors='none',
             s=MELODY_LAYER_PARAMS['point_size'],
             zorder=0
-        )        
+        )
+        self.draw_reference_line()
+    def draw_reference_line(self, base_freq=440):
+        """带可见性控制的参考线绘制方法"""
+        # 清空旧参考线（避免重复绘制）
+        for line in self.reference_lines:
+            line.remove()
+        self.reference_lines.clear()
+        
+        # 计算半音频率范围
+        semitone_ratios = 2 ** (np.arange(-50, 50.1, 100)/1200)  # ±50音分范围[3,5](@ref)
+        ymin, ymax = self.ax.get_ylim()
+        
+        for semitone in range(-48, 49):
+            if (semitone%2 == 0): continue
+            # 计算中心频率[1,2](@ref)
+            center_freq = base_freq * (2 ** (semitone/12))
+            
+            # 计算频率边界[3,5](@ref)
+            freq_band = [center_freq * r for r in semitone_ratios]
+            lower_edge = min(freq_band)
+            upper_edge = max(freq_band)
+            
+            if upper_edge < ymin or lower_edge > ymax: continue
+            
+            # 绘制并存储参考线对象[3,5](@ref)
+            ref_line = self.ax.axhspan(lower_edge, upper_edge,
+                color=COLORS['melody_reference_line'], 
+                alpha=MELODY_LAYER_PARAMS['reference_line_alpha'],
+                linewidth=0,
+                zorder=-10,
+                animated=True)
+            ref_line.set_visible(self.show_reference)
+        
+            self.reference_lines.append(ref_line)
+        # self.ax.figure.canvas.draw_idle()
+    def set_reference_lines_visible(self, visible):
+        """切换参考线显示状态"""
+        self.show_reference = visible
+        
+        # 批量设置可见性（比重新绘制更高效）[3,5](@ref)
+        for line in self.reference_lines:
+            line.set_visible(self.show_reference)
+        
+        # self.ax.figure.canvas.draw_idle()
 
     def process(self, chunk, data_protocol):
         current_time = data_protocol.current_time
@@ -110,7 +156,7 @@ class MelodyLayer(BaseLayer):
             self.scatter.set_offsets(np.empty((0, 2)))
             self.scatter.set_array(np.array([]))
 
-        return [self.scatter]
+        return [self.scatter] + self.reference_lines
     
     def clean(self):
         self.times = []

@@ -15,9 +15,9 @@ BASE_PARAMS = {
     # 标准音高 (Hz)，可设为440.0或442.0等常用值
     'reference_pitch': 442.0,
     # 窗口尺寸
-    'window_size': (2000, 600),
+    'window_size': (1600, 900),
     # 图表绘制间隔
-    'render_interval': 1 / 30,
+    'render_interval': 1 / 60,
     # 计算间隔
     'compute_interval': 1 / 100,
 }
@@ -30,6 +30,7 @@ COLORS = {
     'peaks_cents_above': 'yellow',
     'peaks_cents_below': 'fuchsia',
     'melody_colormap': 'spring',
+    'melody_reference_line': 'cyan',
 }
 
 # 频谱曲线层参数
@@ -39,7 +40,7 @@ SPECTRUM_CURVE_LAYER_PARAMS = {
     'smoothed_curve': False,        # 是否显示为平滑曲线
     'amplitude_range': (-60, 60),   # 幅度显示范围(dB)
     'line_width': 0.5,              # 线宽
-    'alpha': 0.6,                   # 透明度
+    'alpha': 0.7,                   # 透明度
 }
 
 # 峰值层参数
@@ -79,4 +80,5 @@ MELODY_LAYER_PARAMS = {
     'peak_db_offset': 50,
     'multiplication_tolerance': 0.05,
     'misjudgment_max_duration': 0.2,
+    'reference_line_alpha': 0.1,
 }

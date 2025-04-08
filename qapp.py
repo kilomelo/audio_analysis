@@ -66,6 +66,7 @@ class MainWindow(QMainWindow):
         self.control_panel.record_mode_clicked.connect(self._on_record_mode_clicked)
         self.control_panel.slider_released.connect(self._on_slider_released)
         self.control_panel.reduce_noise_toggled.connect(self._on_reduce_noise_toggled)
+        self.control_panel.melody_ref_lines_toggled.connect(self._on_melody_ref_lines_toggled)
 
     def update_file_list(self):
         """加载音频文件列表"""
@@ -121,9 +122,14 @@ class MainWindow(QMainWindow):
         self.audio_processor.seek(value)
 
     def _on_reduce_noise_toggled(self, checked):
-        """降噪开关"""
+        """保存额外降噪音频文件开关"""
         print(f"Reduce noise: {checked}")
         if not self._is_file_mode: self.audio_processor.reduce_noise = checked != 0
+
+    def _on_melody_ref_lines_toggled(self, checked):
+        """旋律参考线开关"""
+        print(f"Melody ref line: {checked}")
+        self.canvas.set_melody_reference_lines_visible(checked != 0)
 
     def _compute_loop(self):
         """高频计算循环"""

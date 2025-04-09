@@ -1,10 +1,12 @@
 # visualizer/melody_layer.py
 import numpy as np
-from config import COLORS, MELODY_LAYER_PARAMS
+from config import COLORS, MELODY_LAYER_PARAMS, BASE_PARAMS
 from visualizer.base_layer import BaseLayer
+from pitch_utils import PitchConverter
 
 class MelodyLayer(BaseLayer):
     def __init__(self):
+        super().__init__()
         self.times = []
         self.freqs = []
         self.volumes = []
@@ -14,14 +16,21 @@ class MelodyLayer(BaseLayer):
         self.possible_misjudgment_peak_time = None
         self.possible_misjudgment_peak_freq = None
         self.reference_lines = []
-        self.show_reference = False
+        self.show_reference = True
+        self.redraw_ref_lines = True
+        self.dynamic_freq_range = True
+        self.pitch_converter = PitchConverter(reference=BASE_PARAMS['reference_pitch'])
+        self.target_ylim_min_midi = self.pitch_converter.frequency_to_midi(MELODY_LAYER_PARAMS['freq_range'][0])
+        self.target_ylim_max_midi = self.pitch_converter.frequency_to_midi(MELODY_LAYER_PARAMS['freq_range'][1])
+        self.bind_param('show_ref_lines', self.set_show_reference, self.get_show_reference)
+        self.bind_param('melody_dynamic_freq_range', self.set_dynamic_freq_range, self.get_dynamic_freq_range)
 
     def initialize(self, fig, position):
         self.ax = fig.add_axes(position, frameon=False)
         self.ax.set_xscale('linear')
         self.ax.set_yscale('log')
         self.ax.set_xlim(-MELODY_LAYER_PARAMS['time_window'], 0)
-        self.ax.set_ylim(*MELODY_LAYER_PARAMS['freq_range'])
+        self.ax.set_ylim(self.pitch_converter.midi_to_frequency(self.target_ylim_min_midi), self.pitch_converter.midi_to_frequency(self.target_ylim_max_midi))
         self.scatter = self.ax.scatter(
             [], [], 
             c=[], 
@@ -33,9 +42,9 @@ class MelodyLayer(BaseLayer):
             s=MELODY_LAYER_PARAMS['point_size'],
             zorder=0
         )
-        self.draw_reference_line()
     def draw_reference_line(self, base_freq=440):
         """带可见性控制的参考线绘制方法"""
+        self.redraw_ref_lines = False
         # 清空旧参考线（避免重复绘制）
         for line in self.reference_lines:
             line.remove()
@@ -54,7 +63,6 @@ class MelodyLayer(BaseLayer):
             freq_band = [center_freq * r for r in semitone_ratios]
             lower_edge = min(freq_band)
             upper_edge = max(freq_band)
-            
             if upper_edge < ymin or lower_edge > ymax: continue
             
             # 绘制并存储参考线对象[3,5](@ref)
@@ -65,27 +73,38 @@ class MelodyLayer(BaseLayer):
                 zorder=-10,
                 animated=True)
             ref_line.set_visible(self.show_reference)
-        
             self.reference_lines.append(ref_line)
-        # self.ax.figure.canvas.draw_idle()
-    def set_reference_lines_visible(self, visible):
-        """切换参考线显示状态"""
-        self.show_reference = visible
-        
-        # 批量设置可见性（比重新绘制更高效）[3,5](@ref)
-        for line in self.reference_lines:
-            line.set_visible(self.show_reference)
-        
-        # self.ax.figure.canvas.draw_idle()
+            
+    def set_show_reference(self, value):
+        if self.show_reference != value:
+            self.show_reference = value
+            # 批量设置可见性（比重新绘制更高效）[3,5](@ref)
+            for line in self.reference_lines:
+                line.set_visible(self.show_reference)
 
+    def get_show_reference(self):
+        return self.show_reference
+    
+    def set_dynamic_freq_range(self, value):
+        if self.dynamic_freq_range != value:
+            self.dynamic_freq_range = value
+            if not self.dynamic_freq_range:
+                self.target_ylim_min_midi = self.pitch_converter.frequency_to_midi(MELODY_LAYER_PARAMS['freq_range'][0])
+                self.target_ylim_max_midi = self.pitch_converter.frequency_to_midi(MELODY_LAYER_PARAMS['freq_range'][1])
+                self.ax.set_ylim(*MELODY_LAYER_PARAMS['freq_range'])
+                self.redraw_ref_lines = True
+            else:
+                self.calculate_target_ylim()
+
+    def get_dynamic_freq_range(self):
+        return self.dynamic_freq_range
+    
     def process(self, chunk, data_protocol):
         current_time = data_protocol.current_time
         peaks = data_protocol.peaks
         volume = data_protocol.volume
-        
         # 过滤无效时间
-        if current_time <= 0:
-            return
+        if current_time <= 0: return
 
         # 时间窗口动态调整
         visible_start = current_time - self.time_window
@@ -103,6 +122,7 @@ class MelodyLayer(BaseLayer):
                 break
 
         # 限制数据存储量
+        outdated = False
         cutoff = current_time - self.time_window
         valid_indices = [i for i, t in enumerate(self.times) if t >= cutoff and t <= current_time]
         if valid_indices:
@@ -110,6 +130,7 @@ class MelodyLayer(BaseLayer):
             self.times = self.times[start_idx:]
             self.freqs = self.freqs[start_idx:]
             self.volumes = self.volumes[start_idx:]
+            if start_idx != 0: outdated = True
         else:
             self.times.clear()
             self.freqs.clear()
@@ -145,7 +166,31 @@ class MelodyLayer(BaseLayer):
                     self.possible_misjudgment_peak_time = None
                     self.possible_misjudgment_peak_freq = None
                     # print(f'misjudgment timeout, len: {len(self.freqs)}')
-        
+
+        if self.dynamic_freq_range:
+            # 有新数据或有旧数据过期时需要重新设置 y 轴范围
+            if has_new_melody or outdated:
+                self.calculate_target_ylim()
+            current_ylim = self.ax.get_ylim()
+            current_ylim_min_midi = self.pitch_converter.frequency_to_midi(current_ylim[0])
+            current_ylim_max_midi = self.pitch_converter.frequency_to_midi(current_ylim[1])
+            need_reset_ylim = False
+            actual_ylim_min_midi = current_ylim_min_midi
+            actual_ylim_max_midi = current_ylim_max_midi
+            if abs(current_ylim_min_midi - self.target_ylim_min_midi) > 0.2:
+                need_reset_ylim = True
+                actual_ylim_min_midi = current_ylim_min_midi + (self.target_ylim_min_midi - current_ylim_min_midi) * MELODY_LAYER_PARAMS['freq_range_fade_speed']
+            if abs(current_ylim_max_midi - self.target_ylim_max_midi) > 0.2:
+                need_reset_ylim = True
+                actual_ylim_max_midi = current_ylim_max_midi + (self.target_ylim_max_midi - current_ylim_max_midi) * MELODY_LAYER_PARAMS['freq_range_fade_speed']
+            if need_reset_ylim:
+                self.ax.set_ylim(self.pitch_converter.midi_to_frequency(actual_ylim_min_midi), self.pitch_converter.midi_to_frequency(actual_ylim_max_midi))
+                self.redraw_ref_lines = True
+    def calculate_target_ylim(self):
+        min_freq = max(min(self.freqs), MELODY_LAYER_PARAMS['freq_range'][0])
+        max_freq = min(max(self.freqs), MELODY_LAYER_PARAMS['freq_range'][1])
+        self.target_ylim_min_midi = int(round(self.pitch_converter.frequency_to_midi(min_freq))) - 8
+        self.target_ylim_max_midi = int(round(self.pitch_converter.frequency_to_midi(max_freq))) + 4
     def draw(self, data_protocol):
         if not MELODY_LAYER_PARAMS['visible']: return []
         # 更新图形数据
@@ -155,6 +200,9 @@ class MelodyLayer(BaseLayer):
         else:
             self.scatter.set_offsets(np.empty((0, 2)))
             self.scatter.set_array(np.array([]))
+
+        if self.redraw_ref_lines:
+            self.draw_reference_line(BASE_PARAMS['reference_pitch'])
 
         return [self.scatter] + self.reference_lines
     

@@ -9,6 +9,7 @@ from visualizer.base_layer import BaseLayer
 
 class PeakLayer(BaseLayer):
     def __init__(self):
+        super().__init__()
         """接收频率轴参数"""
         self.detector = None
         self.pitch_converter = PitchConverter(reference=BASE_PARAMS['reference_pitch'])

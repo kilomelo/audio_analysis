@@ -22,6 +22,7 @@ class MainWindow(QMainWindow):
         else:                  # 实时模式
             self.audio_processor = RealtimeAudioProcessor()
         self._init_ui()
+        self.canvas.connect_control_panel(self.control_panel)
         self._connect_external_signals()
         self.compute_interval = BASE_PARAMS['compute_interval']
         # 控制参数
@@ -61,12 +62,15 @@ class MainWindow(QMainWindow):
 
     def _connect_external_signals(self):
         """连接信号与槽"""
-        self.control_panel.file_selected.connect(self._on_file_selected)
+        self._control_bindings = {}
+        self._control_bindings['rec/noise_reduce_file'] = self._on_reduce_noise_toggled
+        self._control_bindings['file_selected'] = self._on_file_selected
+        self._control_bindings['slider_value'] = self._on_slider_value_changed
+        self.control_panel.param_changed.connect(self._on_control_changed)
+
         self.control_panel.start_end_record_clicked.connect(self._on_start_end_record_clicked)
         self.control_panel.record_mode_clicked.connect(self._on_record_mode_clicked)
-        self.control_panel.slider_released.connect(self._on_slider_released)
-        self.control_panel.reduce_noise_toggled.connect(self._on_reduce_noise_toggled)
-        self.control_panel.melody_ref_lines_toggled.connect(self._on_melody_ref_lines_toggled)
+        self.canvas.canvas_changed.connect(self.on_canvas_changed)
 
     def update_file_list(self):
         """加载音频文件列表"""
@@ -79,6 +83,8 @@ class MainWindow(QMainWindow):
             item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
             self.file_list.addItem(item)
 
+    def on_canvas_changed(self, param_path, value):
+        self.control_panel.update_control(param_path, value)
     def _on_start_end_record_clicked(self):
         if self._is_file_mode: return
         if self.audio_processor.is_recording:
@@ -100,6 +106,12 @@ class MainWindow(QMainWindow):
         self.control_panel.update_button_state(False, False)
         print('切换到录音模式')
 
+    def _on_control_changed(self, param_path, value):
+        """处理控制面板参数变化"""
+        # print(f'qapp._on_control_changed({param_path}, {value})')
+        if param_path not in self._control_bindings: return
+        self._control_bindings[param_path](value)
+
     def _on_file_selected(self, file_name):
         """处理文件选择事件"""
         if not file_name: return
@@ -116,20 +128,15 @@ class MainWindow(QMainWindow):
         self.control_panel.update_button_state(True, False)
         print(f"Selected file: {file_name}")
 
-    def _on_slider_released(self, value):
-        """滑块释放后恢复播放"""
+    def _on_slider_value_changed(self, value):
+        """滑块控件值变化"""
         if not self._is_file_mode: return
         self.audio_processor.seek(value)
 
     def _on_reduce_noise_toggled(self, checked):
         """保存额外降噪音频文件开关"""
         print(f"Reduce noise: {checked}")
-        if not self._is_file_mode: self.audio_processor.reduce_noise = checked != 0
-
-    def _on_melody_ref_lines_toggled(self, checked):
-        """旋律参考线开关"""
-        print(f"Melody ref line: {checked}")
-        self.canvas.set_melody_reference_lines_visible(checked != 0)
+        if not self._is_file_mode: self.audio_processor.reduce_noise = checked
 
     def _compute_loop(self):
         """高频计算循环"""

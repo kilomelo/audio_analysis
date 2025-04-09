@@ -30,7 +30,7 @@ COLORS = {
     'peaks_cents_above': 'yellow',
     'peaks_cents_below': 'fuchsia',
     'melody_colormap': 'spring',
-    'melody_reference_line': 'cyan',
+    'melody_reference_line': 'white',
 }
 
 # 频谱曲线层参数
@@ -80,5 +80,6 @@ MELODY_LAYER_PARAMS = {
     'peak_db_offset': 50,
     'multiplication_tolerance': 0.05,
     'misjudgment_max_duration': 0.2,
-    'reference_line_alpha': 0.1,
+    'reference_line_alpha': 0.08,
+    'freq_range_fade_speed': 0.2,
 }

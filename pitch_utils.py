@@ -17,6 +17,10 @@ class PitchConverter:
             return 0
         return 12 * np.log2(freq / self.reference) + 69
     
+    def midi_to_frequency(self, midi_num):
+        """将MIDI编号转换为频率"""
+        return self.reference * (2 ** ((midi_num - 69) / 12))
+    
     def midi_to_note(self, midi_num):
         """将MIDI编号转换为音名（含八度）"""
         octave = (midi_num // 12) - 1

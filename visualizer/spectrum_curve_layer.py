@@ -7,6 +7,7 @@ from visualizer.base_layer import BaseLayer
 
 class SpectrumCurveLayer(BaseLayer):
     def __init__(self):
+        super().__init__()
         self.sample_rate = None
         self.x_subband = None
         self.x_new = None

@@ -6,6 +6,7 @@ from matplotlib.figure import Figure
 from matplotlib.animation import FuncAnimation
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
+from PyQt5.QtCore import Qt, pyqtSignal
 from visualizer.spectrum_curve_layer import SpectrumCurveLayer
 from visualizer.peak_layer import PeakLayer
 from visualizer.melody_layer import MelodyLayer
@@ -29,7 +30,9 @@ class DataProtocol:
             setattr(self, key, value)
 class MplCanvas(FigureCanvas):
     """自定义Matplotlib画布"""
+    canvas_changed = pyqtSignal(str, object)
     def __init__(self, parent=None):
+        self._param_bindings = {}
         self.data_buffer = deque(maxlen=3)  # 缓冲最近3帧数据
         self.latest_artists = []
         self.fig = Figure(facecolor='black')
@@ -39,6 +42,39 @@ class MplCanvas(FigureCanvas):
         self.layers = [SpectrumCurveLayer(), PeakLayer(), MelodyLayer()]
         for layer in self.layers:
             layer.initialize(self.fig, pos)  # 使用独立坐标轴
+        self.register_binding(
+            "view/show_ref_lines", 
+            layer_index=2,  # MelodyLayer在layers列表中的索引
+            param_name="show_ref_lines"
+        )
+        self.register_binding(
+            'view/melody_dynamic_freq_range',
+            layer_index=2,
+            param_name='melody_dynamic_freq_range'
+        )
+    def register_binding(self, param_path, layer_index, param_name):
+        """注册参数绑定路径示例: 
+        'layers/1/show_reference' -> layers[1].set_param('show_reference')
+        """
+        self._param_bindings[param_path] = (layer_index, param_name)
+        
+    def connect_control_panel(self, control_panel):
+        # 控件 -> 图层
+        control_panel.param_changed.connect(self._on_control_changed)
+        # 图层 -> 控件
+        for i, layer in enumerate(self.layers):
+            layer.param_changed.connect(
+                lambda name, v, idx=i: self._on_layer_changed(idx, name, v)
+            )
+    
+    def _on_control_changed(self, param_path, value):
+        if param_path not in self._param_bindings: return
+        layer_idx, param_name = self._param_bindings[param_path]
+        self.layers[layer_idx].set_param(param_name, value)
+    
+    def _on_layer_changed(self, layer_idx, param_name, value):
+        param_path = f"layers/{layer_idx}/{param_name}"
+        self.parent().window().on_canvas_changed.update_control(param_path, value)
 
     def compute(self, current_time, chunk):
         data = DataProtocol()
@@ -69,9 +105,6 @@ class MplCanvas(FigureCanvas):
             return []
 
     def start_animation(self):
-        # todo 改成填充默认数据
-        # while len(self.data_buffer) == 0:
-            # time.sleep(0.01)  # 短暂等待，避免阻塞
         """启动动画"""
         self.ani = FuncAnimation(
             self.fig, 
@@ -91,6 +124,3 @@ class MplCanvas(FigureCanvas):
         """响应音频参数变化"""
         for layer in self.layers:
             layer.on_audio_params_changed(sample_rate, chunk_size, n_fft)
-
-    def set_melody_reference_lines_visible(self, visible):
-        self.layers[2].set_reference_lines_visible(visible)
